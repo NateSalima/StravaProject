@@ -20,29 +20,37 @@ bucket_name = ['datascienceproject-bucket']
 code = ['code']
 
 
-
+# gets activity data from desired dates, default is set to 30 days
+# inputs:   date_start: desired start date, date_end: desired end date
+# outputs:  activity_df: dataframe of activity data, activity_stream: dataframe of activities stream,
+#           stream_dict: dictionary of the streams seperated by each activity
 def get_activity_data(date_start = pd.to_datetime('today', format = "%Y-%m-%d") - pd.DateOffset(days=30),
                       date_end = pd.to_datetime('today', format = "%Y-%m-%d")):
     client = Client()
     access_token = _get_access_token(client, client_id, client_secret, refresh_token)
     client = Client(access_token=access_token)
-    print(client.get_athlete())
+    activity_df = pd.DataFrame()
+    stream_dict = {}
 
-    activity_df, activity_streams = _get_activity_data(client,
-                                                       date_start = date_start,
-                                                       date_end = date_end)
-    return activity_df, activity_streams
+    #print(client.get_athlete())
+
+    activity1_dict, activity_df, activity_streams, stream_dict = _get_activity_data(client,
+                                                        date_start = date_start,
+                                                        date_end = date_end)
+    return activity1_dict, activity_df, activity_streams, stream_dict
 
 
 def _get_activity_data(client,
-                       date_start=pd.to_datetime('today', format="%Y-%m-%d") - pd.DateOffset(days=30),
-                       date_end=pd.to_datetime('today', format="%Y-%m-%d"),
+                       date_start = pd.to_datetime('today', format="%Y-%m-%d") - pd.DateOffset(days=30),
+                       date_end = pd.to_datetime('today', format="%Y-%m-%d"),
                        resolution = 'high',
-                       types = ['time', 'distance', 'altitude', 'latlng']):
+                       types = ['altitude', 'latlng', 'distance', 'time']):
 
     activity_df = pd.DataFrame()
     activity_streams = dict()
-    
+
+    stream_dict = {}
+    activity1_dict = []
     for activity in client.get_activities(after=date_start,
                                           before=date_end):
         streams = client.get_activity_streams(activity.id,
@@ -50,12 +58,29 @@ def _get_activity_data(client,
                                               series_type='time',
                                               resolution=resolution)
         if not activity.manual:
-            print(activity.id)
+ #           print(activity.id)
+            activity_dict = {'id': activity.id}
             for key, value in streams.items():
                 streams[key] = value.data
-                print(value.data)
+                activity_dict.update({key: value.data})
             activity_streams[activity.id] = pd.DataFrame(streams)
-        
+            stream_dict.update(activity_dict)
+
+        temp_dict = {'activity_name': activity.name,
+                    'activity_id': activity.id,
+                    'started_at': str(activity.start_date),
+                    'moving_time_min': int(activity.moving_time.seconds / 60),
+                    'distance_km': round(activity.distance.num / 1000, 1),
+                    'avg_speed_ms': str(activity.average_speed),
+                    'total_workout_duration': str(activity.elapsed_time),
+                    'total_elevation_gain_m': str(activity.total_elevation_gain),
+                    'manual_entry': activity.manual,
+                    'description': activity.description
+                    }
+
+        #print(temp_dict)
+        #activity1_dict.update(temp_dict)
+        activity1_dict.append(temp_dict)
         activity_df = activity_df.append(pd.DataFrame([{'activity_name': activity.name,
                                                         'activity_id': activity.id,
                                                         'started_at': activity.start_date,
@@ -67,12 +92,11 @@ def _get_activity_data(client,
                                                         'manual_entry': activity.manual,
                                                         'description': activity.description
                                                         }]))
-    return activity_df, activity_streams
+    return activity1_dict, activity_df, activity_streams, stream_dict
 
 
-
+# gets new access token if you already hava a refresh token for an athlete
 def _get_access_token(client, client_id, client_secret, refresh_token):
-    client = Client()
     token_response = client.refresh_access_token(client_id=client_id,
                                       client_secret=client_secret,
                                       refresh_token=refresh_token)
@@ -83,5 +107,4 @@ def _get_access_token(client, client_id, client_secret, refresh_token):
 
 
 test = get_activity_data()
-#print(test[1])
-print(type(test[0])) 
+print(test[0])
