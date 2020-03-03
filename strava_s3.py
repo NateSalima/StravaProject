@@ -1,6 +1,7 @@
 from stravalib import Client
 import pandas as pd
 from flask import request
+from sqlalchemy import create_engine
 
 import boto3
 import os
@@ -14,6 +15,7 @@ json_file = open(os.path.join(ROOT_DIR, 'strava_config.json'), 'r')
 json_str = json_file.read()
 api_info = json.loads(json_str)['strava_api']
 s3_info = json.loads(json_str)['s3_credentials']
+redshift_info = json.loads(json_str)['redshift_credentials']
 
 # Strava Credentials
 client_id = api_info['client_id']
@@ -25,13 +27,26 @@ bucket_name = s3_info['bucket_name']
 access_key = s3_info['access_key']
 secret_access_key = s3_info['secret_access_key']
 
+# AWS redshift credentials
+table_name = redshift_info['table_name']
+iam_user = redshift_info['iam_user']
+iam_password = redshift_info['iam_password']
+
+
+# gets most recent start_date that is already uploaded in redshift
+# returnes date/time value
+def last_activity_date():
+    engine = create_engine(f'redshift+psycopg2://{iam_user}:{iam_password}@redshift-cluster-1.c3ubemyorhfw.us-west-2.redshift.amazonaws.com:5439/{table_name}')
+    df = pd.read_sql_query('SELECT start_date FROM public.strava_json2 ORDER BY start_date DESC LIMIT 1',con=engine)
+    return(df.loc[0]['start_date'])
+
 
 # gets activity data from desired dates, default is set to 30 days
 # inputs:   date_start: desired start date, date_end: desired end date
 # outputs:  activity_df: dataframe of activity data, activity_stream: dataframe of activities stream,
 #           stream_list: list of actrivity objects containing various streams from each activity
-def get_activity_data(date_start = pd.to_datetime('today', format = "%Y-%m-%d") - pd.DateOffset(days=30),
-                      date_end = pd.to_datetime('today', format = "%Y-%m-%d")):
+def get_activity_data(date_start = last_activity_date(),
+                      date_end = pd.to_datetime('today', format = "%Y-%m-%d %H:%M:%S")):
     client = Client()
     access_token = _get_access_token(client, client_id, client_secret, refresh_token)
     client = Client(access_token=access_token)
@@ -45,8 +60,8 @@ def get_activity_data(date_start = pd.to_datetime('today', format = "%Y-%m-%d") 
 
 
 def _get_activity_data(client,
-                       date_start = pd.to_datetime('today', format="%Y-%m-%d") - pd.DateOffset(days=30),
-                       date_end = pd.to_datetime('today', format="%Y-%m-%d"),
+                       date_start = last_activity_date(),
+                       date_end = pd.to_datetime('today', format="%Y-%m-%d %H:%M:%S"),
                        resolution = 'high',
                        types = ['altitude', 'latlng', 'distance', 'time']):
 
@@ -113,7 +128,7 @@ def upload_s3(upload_data, upload_name = "strava.json"):
         aws_access_key_id = access_key,
         aws_secret_access_key = secret_access_key
     )
-    # gets only new data
+    # gets only new data 
     updated_data = _upload_s3(client, upload_data, file_name = upload_name)
     with open(upload_name, 'w') as fp:
         json.dump(updated_data, fp)
@@ -150,7 +165,9 @@ def get_past_data(client, file_name):
     return(data)
 
 
+print(last_activity_date())
+#print(df.loc[0])
+
 upload_data = get_activity_data()
 upload_s3(upload_data[0], upload_name = "strava.json")
 upload_s3(upload_data[3], upload_name = "strava_streams.json")
-
