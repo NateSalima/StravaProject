@@ -106,21 +106,51 @@ def _get_access_token(client, client_id, client_secret, refresh_token):
     return access_token
 
 
-def upload_s3(json_obj, upload_name = "strava.json"):
-
-    with open(upload_name, 'w') as fp:
-        json.dump(json_obj, fp)
-
+def upload_s3(upload_data, upload_name = "strava.json"):
     # S3 Connect
     client = boto3.client(
         's3',
         aws_access_key_id = access_key,
         aws_secret_access_key = secret_access_key
     )
+    # gets only new data
+    updated_data = _upload_s3(client, upload_data, file_name = upload_name)
+    with open(upload_name, 'w') as fp:
+        json.dump(updated_data, fp)
     client.upload_file(upload_name, bucket_name, "StravaData/" + upload_name)
     os.remove(upload_name)
+
+def _upload_s3(client, upload_data, file_name = "stava.json"):
+    new_data = upload_data
+    past_data = get_past_data(client, file_name)
+    updated_data = past_data
+    def check_past(i):
+        for j in past_data:
+            if i == j:
+                print("data already in file")
+                return
+        return i
+
+    new_object_counter = 0
+    for i in new_data:
+        temp = check_past(i)
+        if temp is not None:
+            updated_data.append(temp)
+            new_object_counter += 1
+    print(str(new_object_counter) + " objects added")
+    return(updated_data)
+
+
+
+def get_past_data(client, file_name):
+    result = client.get_object(Bucket= bucket_name, Key="StravaData/" + file_name) 
+    text = result["Body"].read().decode()
+    data = json.loads(text)
+    print("Data Sucessfully Retrieved From S3")
+    return(data)
 
 
 upload_data = get_activity_data()
 upload_s3(upload_data[0], upload_name = "strava.json")
 upload_s3(upload_data[3], upload_name = "strava_streams.json")
+
