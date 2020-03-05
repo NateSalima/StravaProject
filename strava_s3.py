@@ -7,7 +7,13 @@ import boto3
 import os
 import json
 import data
+import re
 
+def remove_non_numeric(data):
+    data = str(data)
+    non_decimal = re.compile(r'[^\d.]+')
+    non_decimal.sub('', data)
+    return(float(non_decimal.sub('', data)))
 
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -28,7 +34,7 @@ access_key = s3_info['access_key']
 secret_access_key = s3_info['secret_access_key']
 
 # AWS redshift credentials
-table_name = redshift_info['table_name']
+db_name = redshift_info['db_name']
 iam_user = redshift_info['iam_user']
 iam_password = redshift_info['iam_password']
 
@@ -36,8 +42,8 @@ iam_password = redshift_info['iam_password']
 # gets most recent start_date that is already uploaded in redshift
 # returnes date/time value
 def last_activity_date():
-    engine = create_engine(f'redshift+psycopg2://{iam_user}:{iam_password}@redshift-cluster-1.c3ubemyorhfw.us-west-2.redshift.amazonaws.com:5439/{table_name}')
-    df = pd.read_sql_query('SELECT start_date FROM public.strava_json2 ORDER BY start_date DESC LIMIT 1',con=engine)
+    engine = create_engine(f'redshift+psycopg2://{iam_user}:{iam_password}@redshift-cluster-1.c3ubemyorhfw.us-west-2.redshift.amazonaws.com:5439/{db_name}')
+    df = pd.read_sql_query('SELECT start_date FROM public.test ORDER BY start_date DESC LIMIT 1',con=engine)
     return(df.loc[0]['start_date'])
 
 
@@ -86,26 +92,26 @@ def _get_activity_data(client,
 
         temp_dict = {'activity_name': activity.name,
                     'activity_id': activity.id,
-                    'started_at': str(activity.start_date),
+                    'type': activity.type,
+                    'start_date': str(activity.start_date),
                     'moving_time_min': int(activity.moving_time.seconds / 60),
                     'distance_km': round(activity.distance.num / 1000, 1),
-                    'avg_speed_ms': str(activity.average_speed),
+                    'avg_speed_ms': remove_non_numeric(activity.average_speed),
                     'total_workout_duration': str(activity.elapsed_time),
-                    'total_elevation_gain_m': str(activity.total_elevation_gain),
+                    'total_elevation_gain_m': remove_non_numeric(activity.total_elevation_gain),
                     'manual_entry': activity.manual,
-                    'description': activity.description
                     }
         activity_list.append(temp_dict)
         activity_df = activity_df.append(pd.DataFrame([{'activity_name': activity.name,
                                                         'activity_id': activity.id,
-                                                        'started_at': activity.start_date,
+                                                        'type': activity.type,
+                                                        'start_date': str(activity.start_date),
                                                         'moving_time_min': int(activity.moving_time.seconds / 60),
                                                         'distance_km': round(activity.distance.num / 1000, 1),
-                                                        'avg_speed_ms': activity.average_speed,
-                                                        'total_workout_duration': activity.elapsed_time,
-                                                        'total_elevation_gain_m': activity.total_elevation_gain,
+                                                        'avg_speed_ms': remove_non_numeric(activity.average_speed),
+                                                        'total_workout_duration': str(activity.elapsed_time),
+                                                        'total_elevation_gain_m': remove_non_numeric(activity.total_elevation_gain),
                                                         'manual_entry': activity.manual,
-                                                        'description': activity.description
                                                         }]))
     return activity_list, activity_df, activity_streams, stream_list
 
