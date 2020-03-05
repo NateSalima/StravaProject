@@ -57,14 +57,13 @@ def upload_redshift():
     
     # get only new records
     df = df[(df['start_date'] > last_date)]
-    print(df)
-    print(type(df.start_date[0]))
-    df.set_index('activity_id', inplace=True)
-
-    # upload the dataframe to redshift
-    engine = create_engine(f'redshift+psycopg2://{iam_user}:{iam_password}@redshift-cluster-1.c3ubemyorhfw.us-west-2.redshift.amazonaws.com:5439/{db_name}')
-    df.to_sql('test', con=engine, if_exists='append')
-
+    if df.empty:
+        print('no data to add')
+    else:
+        print(f"Added {df.shape[0]} activity records")
+        df.set_index('activity_id', inplace=True)
+        engine = create_engine(f'redshift+psycopg2://{iam_user}:{iam_password}@redshift-cluster-1.c3ubemyorhfw.us-west-2.redshift.amazonaws.com:5439/{db_name}')
+        df.to_sql('test', con=engine, if_exists='append')
 
 def first_time():
     df = get_json_s3()
