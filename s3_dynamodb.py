@@ -8,7 +8,6 @@ from pandas.io.json import json_normalize
 from sqlalchemy import create_engine
 import configparser
 import decimal
-import time
 
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -22,6 +21,7 @@ bucket_name = s3_info['bucket_name']
 access_key = s3_info['access_key']
 secret_access_key = s3_info['secret_access_key']
 
+# gets json from s3 buckets
 def get_json_s3(file_name = "strava_streams.json"):
     client = boto3.client(
         's3',
@@ -33,6 +33,7 @@ def get_json_s3(file_name = "strava_streams.json"):
     data = json.loads(text)
     return(data)
 
+# uploads json to dynamodb
 def move_json():
     dynamodb = boto3.resource(
         'dynamodb',
@@ -51,7 +52,7 @@ def move_json():
         altitude = list(map(round_float_to_decimal, item["altitude"]))
         latlng = [list(map(round_float_to_decimal , i)) for i in item["latlng"]]
         distance = list(map(round_float_to_decimal, item["distance"]))
-        time_elapsed = item["time"] 
+        time = item["time"] 
 
         table.put_item(
             Item={
@@ -59,19 +60,18 @@ def move_json():
                 'altitude': altitude,
                 'latlng': latlng,
                 'distance': distance,
-                'time': time_elapsed
+                'time': time
             }
         )
     print("successfully uploaded to dynamodb")
 
-# workaround to decimal error
+# workaround to dynamo db type decimal error
 def round_float_to_decimal(float_value):
     with decimal.localcontext(boto3.dynamodb.types.DYNAMODB_CONTEXT) as decimalcontext:
         decimalcontext.traps[decimal.Inexact] = 0
         decimalcontext.traps[decimal.Rounded] = 0
         decimal_value = decimalcontext.create_decimal_from_float(float_value)
     return decimal_value
-
 
 
 move_json()

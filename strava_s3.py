@@ -9,11 +9,6 @@ import json
 import data
 import re
 
-def remove_non_numeric(data):
-    data = str(data)
-    non_decimal = re.compile(r'[^\d.]+')
-    non_decimal.sub('', data)
-    return(float(non_decimal.sub('', data)))
 
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -40,12 +35,18 @@ iam_password = redshift_info['iam_password']
 
 
 # gets most recent start_date that is already uploaded in redshift
-# returnes date/time value
+# returns date/time value
 def last_activity_date():
     engine = create_engine(f'redshift+psycopg2://{iam_user}:{iam_password}@redshift-cluster-1.c3ubemyorhfw.us-west-2.redshift.amazonaws.com:5439/{db_name}')
     df = pd.read_sql_query('SELECT start_date FROM public.test ORDER BY start_date DESC LIMIT 1',con=engine)
     return(df.loc[0]['start_date'])
-
+ 
+#removes all non-numeric items from an object and converts to float
+def remove_non_numeric(data):
+    data = str(data)
+    non_decimal = re.compile(r'[^\d.]+')
+    non_decimal.sub('', data)
+    return(float(non_decimal.sub('', data)))
 
 # gets activity data from desired dates, default is set to 30 days
 # inputs:   date_start: desired start date, date_end: desired end date
@@ -127,6 +128,7 @@ def _get_access_token(client, client_id, client_secret, refresh_token):
     return access_token
 
 
+# uploads file to s3 client
 def upload_s3(upload_data, upload_name = "strava.json"):
     # S3 Connect
     client = boto3.client(
@@ -141,6 +143,7 @@ def upload_s3(upload_data, upload_name = "strava.json"):
     client.upload_file(upload_name, bucket_name, "StravaData/" + upload_name)
     os.remove(upload_name)
 
+# adds only new data to the json obhect and returns the object
 def _upload_s3(client, upload_data, file_name = "stava.json"):
     new_data = upload_data
     past_data = get_past_data(client, file_name)
@@ -162,7 +165,7 @@ def _upload_s3(client, upload_data, file_name = "stava.json"):
     return(updated_data)
 
 
-
+# gets past data from s3
 def get_past_data(client, file_name):
     result = client.get_object(Bucket= bucket_name, Key="StravaData/" + file_name) 
     text = result["Body"].read().decode()
