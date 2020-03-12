@@ -1,13 +1,14 @@
 import boto3
 import os
 import psycopg2
-import json
 import numpy as np
 import pandas as pd
 from pandas.io.json import json_normalize
 from sqlalchemy import create_engine
 import configparser
 import decimal
+from dynamodb_json import json_util as dyjson
+import json
 
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -35,34 +36,27 @@ def get_json_s3(file_name = "strava_streams.json"):
 
 # uploads json to dynamodb
 def move_json():
-    dynamodb = boto3.resource(
+    client = boto3.client(
         'dynamodb',
         aws_access_key_id = access_key,
         aws_secret_access_key = secret_access_key,
         region_name='us-west-2'
     )
 
-    table = dynamodb.Table('strava_streams')
-
     streams_json = get_json_s3()
     print("uploading to dynamodb")
 
+    count = 0
     for item in streams_json:
-        id = item["id"]
-        altitude = list(map(round_float_to_decimal, item["altitude"]))
-        latlng = [list(map(round_float_to_decimal , i)) for i in item["latlng"]]
-        distance = list(map(round_float_to_decimal, item["distance"]))
-        time = item["time"] 
-
-        table.put_item(
-            Item={
-                'id': id,
-                'altitude': altitude,
-                'latlng': latlng,
-                'distance': distance,
-                'time': time
-            }
+        item = dyjson.dumps(item)
+        item = json.loads(item)
+        
+        client.put_item(
+            TableName = 'strava_streams',
+            Item=item
         )
+        count += 1
+    print(f"added {count} objects to dynamodb")
     print("successfully uploaded to dynamodb")
 
 # workaround to dynamo db type decimal error
@@ -70,6 +64,7 @@ def round_float_to_decimal(float_value):
     with decimal.localcontext(boto3.dynamodb.types.DYNAMODB_CONTEXT) as decimalcontext:
         decimalcontext.traps[decimal.Inexact] = 0
         decimalcontext.traps[decimal.Rounded] = 0
+        decimalcontext.prec = 1
         decimal_value = decimalcontext.create_decimal_from_float(float_value)
     return decimal_value
 
