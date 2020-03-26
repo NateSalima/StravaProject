@@ -6,13 +6,14 @@ from sqlalchemy import create_engine
 import boto3
 import os
 import json
-import data
+#import data
+import time
 import re
 
 
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 
-json_file = open(os.path.join(ROOT_DIR, 'strava_config.json'), 'r')
+json_file = open(os.path.join(ROOT_DIR, 'strava_config1.json'), 'r')
 json_str = json_file.read()
 api_info = json.loads(json_str)['strava_api']
 s3_info = json.loads(json_str)['s3_credentials']
@@ -30,6 +31,8 @@ secret_access_key = s3_info['secret_access_key']
 
 # AWS redshift credentials
 db_name = redshift_info['db_name']
+table_name = redshift_info['table_name']
+endpoint = redshift_info['endpoint']
 iam_user = redshift_info['iam_user']
 iam_password = redshift_info['iam_password']
 
@@ -37,9 +40,9 @@ iam_password = redshift_info['iam_password']
 # gets most recent start_date that is already uploaded in redshift
 # returns date/time value
 def last_activity_date():
-    engine = create_engine(f'redshift+psycopg2://{iam_user}:{iam_password}@redshift-cluster-1.c3ubemyorhfw.us-west-2.redshift.amazonaws.com:5439/{db_name}')
-    df = pd.read_sql_query('SELECT start_date FROM public.test ORDER BY start_date DESC LIMIT 1',con=engine)
-    return(df.loc[0]['start_date'])
+    engine = create_engine(f'redshift+psycopg2://{iam_user}:{iam_password}@{endpoint}/{db_name}')
+    df = pd.read_sql_query(f'SELECT start_date FROM public.{table_name} ORDER BY start_date DESC LIMIT 1',con=engine)
+    return(df.loc[0]['start_date']) 
  
 #removes all non-numeric items from an object and converts to float
 def remove_non_numeric(data):
@@ -57,13 +60,12 @@ def get_activity_data(date_start = last_activity_date(),
     client = Client()
     access_token = _get_access_token(client, client_id, client_secret, refresh_token)
     client = Client(access_token=access_token)
-    activity_df = pd.DataFrame()
     stream_list = []
 
-    activity_list, activity_df, activity_streams, stream_list = _get_activity_data(client,
+    activity_list, stream_list = _get_activity_data(client,
                                                         date_start = date_start,
                                                         date_end = date_end)
-    return activity_list, activity_df, activity_streams, stream_list
+    return activity_list, stream_list
 
 
 def _get_activity_data(client,
@@ -71,9 +73,6 @@ def _get_activity_data(client,
                        date_end = pd.to_datetime('today', format="%Y-%m-%d %H:%M:%S"),
                        resolution = 'high',
                        types = ['altitude', 'latlng', 'distance', 'time']):
-
-    activity_df = pd.DataFrame()
-    activity_streams = dict()
 
     stream_list = []
     activity_list = []
@@ -84,11 +83,13 @@ def _get_activity_data(client,
                                               series_type='time',
                                               resolution=resolution)
         if not activity.manual:
-            activity_dict = {'id': activity.id}
+            activity_dict = {'partition': '1',
+                             'id': activity.id,
+                             'name': activity.name}
+            activity_dict.update({'date': str(activity.start_date)})
             for key, value in streams.items():
                 streams[key] = value.data
                 activity_dict.update({key: value.data})
-            activity_streams[activity.id] = pd.DataFrame(streams)
             stream_list.append(activity_dict)
 
         temp_dict = {'activity_name': activity.name,
@@ -103,18 +104,7 @@ def _get_activity_data(client,
                     'manual_entry': activity.manual,
                     }
         activity_list.append(temp_dict)
-        activity_df = activity_df.append(pd.DataFrame([{'activity_name': activity.name,
-                                                        'activity_id': activity.id,
-                                                        'type': activity.type,
-                                                        'start_date': str(activity.start_date),
-                                                        'moving_time_min': int(activity.moving_time.seconds / 60),
-                                                        'distance_km': round(activity.distance.num / 1000, 1),
-                                                        'avg_speed_ms': remove_non_numeric(activity.average_speed),
-                                                        'total_workout_duration': str(activity.elapsed_time),
-                                                        'total_elevation_gain_m': remove_non_numeric(activity.total_elevation_gain),
-                                                        'manual_entry': activity.manual,
-                                                        }]))
-    return activity_list, activity_df, activity_streams, stream_list
+    return activity_list, stream_list
 
 
 # gets new access token if you already hava a refresh token for an athlete
@@ -179,4 +169,4 @@ print(last_activity_date())
 
 upload_data = get_activity_data()
 upload_s3(upload_data[0], upload_name = "strava.json")
-upload_s3(upload_data[3], upload_name = "strava_streams.json")
+upload_s3(upload_data[1], upload_name = "strava_streams.json")

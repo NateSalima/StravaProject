@@ -1,6 +1,7 @@
 #config files
 dynamodb_config.json
 strava_config.json
+strava_config1.json
 mapbox_tkn.txt
 __pycache__/
 .ipynb_checkpoints/

@@ -29,9 +29,13 @@ def get_json_s3(file_name = "strava_streams.json"):
         aws_access_key_id=access_key,
         aws_secret_access_key=secret_access_key
     )
-    result = client.get_object(Bucket=bucket_name, Key="StravaData/" + file_name) 
-    text = result["Body"].read().decode()
-    data = json.loads(text)
+    def get_file(client):
+        result = client.get_object(Bucket=bucket_name, Key="StravaData/" + file_name) 
+        text = result["Body"].read().decode()
+        data = json.loads(text)
+        return data
+    data = get_file(client) 
+    data
     return(data)
 
 # uploads json to dynamodb
@@ -52,21 +56,15 @@ def move_json():
         item = json.loads(item)
         
         client.put_item(
-            TableName = 'strava_streams',
+            TableName = 'strava_streams2',
             Item=item
         )
         count += 1
     print(f"added {count} objects to dynamodb")
     print("successfully uploaded to dynamodb")
 
-# workaround to dynamo db type decimal error
-def round_float_to_decimal(float_value):
-    with decimal.localcontext(boto3.dynamodb.types.DYNAMODB_CONTEXT) as decimalcontext:
-        decimalcontext.traps[decimal.Inexact] = 0
-        decimalcontext.traps[decimal.Rounded] = 0
-        decimalcontext.prec = 1
-        decimal_value = decimalcontext.create_decimal_from_float(float_value)
-    return decimal_value
+
+    
 
 
 move_json()
