@@ -4,14 +4,14 @@ import os
 import psycopg2
 import numpy as np
 import pandas as pd
-from pandas.io.json import json_normalize
+from pandas import json_normalize
 from sqlalchemy import create_engine
 import configparser
 
 
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 
-json_file = open(os.path.join(ROOT_DIR, 'strava_config.json'), 'r')
+json_file = open(os.path.join(ROOT_DIR, 'strava_config1.json'), 'r')
 json_str = json_file.read()
 s3_info = json.loads(json_str)['s3_credentials']
 redshift_info = json.loads(json_str)['redshift_credentials']
@@ -23,16 +23,29 @@ secret_access_key = s3_info['secret_access_key']
 
 # AWS redshift credentials
 db_name = redshift_info['db_name']
+table_name = redshift_info['table_name']
+endpoint = redshift_info['endpoint']
 iam_user = redshift_info['iam_user']
 iam_password = redshift_info['iam_password']
+
+df_names = ['name',
+            'id',  
+            'type',
+            'start_date',
+            'elapsed_time_min',
+            'distance_km',
+            'average_speed_ms',
+            'workout_duration',
+            'total_elevation_gain_m',
+            'manual_entry']
 
 
 # gets most recent start_date that is already uploaded in redshift
 # returnes date/time value
 def last_activity_date():
-    engine = create_engine(f'redshift+psycopg2://{iam_user}:{iam_password}@redshift-cluster-1.c3ubemyorhfw.us-west-2.redshift.amazonaws.com:5439/{db_name}')
-    df = pd.read_sql_query('SELECT start_date FROM public.test ORDER BY start_date DESC LIMIT 1',con=engine)
-    return(df.loc[0]['start_date'])
+    engine = create_engine(f'redshift+psycopg2://{iam_user}:{iam_password}@{endpoint}/{db_name}')
+    df = pd.read_sql_query(f'SELECT start_date FROM public.{table_name} ORDER BY start_date DESC LIMIT 1',con=engine)
+    return(df.loc[0]['start_date']) 
 
 def get_json_s3(file_name = "strava.json"):
     client = boto3.client(
@@ -52,7 +65,9 @@ def get_json_s3(file_name = "strava.json"):
 def upload_redshift():
     df = pd.DataFrame()
     df = get_json_s3()
+    df.columns = df_names
     last_date = last_activity_date()
+    print(last_date)
     df['start_date'] = pd.to_datetime(df['start_date'])
     
     # get only new records
@@ -62,15 +77,18 @@ def upload_redshift():
     else:
         print(f"Added {df.shape[0]} activity records")
         df.set_index('activity_id', inplace=True)
-        engine = create_engine(f'redshift+psycopg2://{iam_user}:{iam_password}@redshift-cluster-1.c3ubemyorhfw.us-west-2.redshift.amazonaws.com:5439/{db_name}')
-        df.to_sql('test', con=engine, if_exists='append')
+        engine = create_engine(f'redshift+psycopg2://{iam_user}:{iam_password}@{endpoint}/{db_name}')
+        df.to_sql('strava', con=engine, if_exists='append')
 
 def first_time():
     df = get_json_s3()
-    df.set_index('activity_id', inplace=True)
-    engine = create_engine(f'redshift+psycopg2://{iam_user}:{iam_password}@redshift-cluster-1.c3ubemyorhfw.us-west-2.redshift.amazonaws.com:5439/{db_name}')
-    df.to_sql('test', con=engine, if_exists='append')
+    df.columns = df_names
+    del df['workout_duration']
+    df.set_index('id', inplace=True)
+    print(df.head())
+    engine = create_engine(f'redshift+psycopg2://{iam_user}:{iam_password}@{endpoint}/{db_name}')
+    df.to_sql('strava', con=engine, if_exists='append')
 
-#first_time()
+first_time()
 
-upload_redshift()
+#upload_redshift()

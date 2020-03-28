@@ -12,7 +12,7 @@ import json
 
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 
-json_file = open(os.path.join(ROOT_DIR, 'strava_config.json'), 'r')
+json_file = open(os.path.join(ROOT_DIR, 'strava_config1.json'), 'r')
 json_str = json_file.read()
 s3_info = json.loads(json_str)['s3_credentials']
 redshift_info = json.loads(json_str)['redshift_credentials']
@@ -56,7 +56,7 @@ def move_json():
         item = json.loads(item)
         
         client.put_item(
-            TableName = 'strava_streams2',
+            TableName = 'strava_streams',
             Item=item
         )
         count += 1
