@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 from pandas import json_normalize
 from sqlalchemy import create_engine
+from datetime import timezone
 import configparser
 
 
@@ -63,20 +64,21 @@ def get_json_s3(file_name = "strava.json"):
     return(df)
 
 def upload_redshift():
-    df = pd.DataFrame()
     df = get_json_s3()
     df.columns = df_names
     last_date = last_activity_date()
-    print(last_date)
+    print(last_date.replace(tzinfo=timezone.utc).isoformat())
+    last_date = last_date.replace(tzinfo=timezone.utc).isoformat()
     df['start_date'] = pd.to_datetime(df['start_date'])
     
     # get only new records
-    df = df[(df['start_date'] > last_date)]
+    df = df[df['start_date'] > last_date]
     if df.empty:
         print('no data to add')
     else:
         print(f"Added {df.shape[0]} activity records")
-        df.set_index('activity_id', inplace=True)
+        del df['workout_duration']
+        df.set_index('id', inplace=True)
         engine = create_engine(f'redshift+psycopg2://{iam_user}:{iam_password}@{endpoint}/{db_name}')
         df.to_sql('strava', con=engine, if_exists='append')
 
@@ -89,6 +91,6 @@ def first_time():
     engine = create_engine(f'redshift+psycopg2://{iam_user}:{iam_password}@{endpoint}/{db_name}')
     df.to_sql('strava', con=engine, if_exists='append')
 
-first_time()
+#first_time()
 
-#upload_redshift()
+upload_redshift()
