@@ -1,12 +1,13 @@
 import boto3
 import os
 import psycopg2
+import configparser
+import decimal
 import numpy as np
 import pandas as pd
 from pandas.io.json import json_normalize
 from sqlalchemy import create_engine
-import configparser
-import decimal
+from datetime import datetime, timezone
 from dynamodb_json import json_util as dyjson
 import json
 
@@ -38,6 +39,27 @@ def get_json_s3(file_name = "strava_streams.json"):
     data
     return(data)
 
+def dynamo_last_activity(client):
+    dt = datetime.now()
+    dt = dt.replace(tzinfo=timezone.utc).isoformat()
+    response = client.query(
+        TableName='strava_streams',
+        KeyConditionExpression='#S = :partition AND #T < :date',
+        ExpressionAttributeNames={
+            "#S": "partition", "#T": "date", "#d":"date"
+        },
+        ExpressionAttributeValues={
+            ":partition": {"S": "1"},
+            ":date": {"S": dt}
+        },
+        Limit = 1,
+        ScanIndexForward = False,
+        ProjectionExpression = '#d',
+    )
+    data=dyjson.loads(response)
+    date = data['Items'][0]['date']
+    return(date)
+
 # uploads json to dynamodb
 def move_json():
     client = boto3.client(
@@ -46,26 +68,25 @@ def move_json():
         aws_secret_access_key = secret_access_key,
         region_name='us-west-2'
     )
-
     streams_json = get_json_s3()
     print("uploading to dynamodb")
 
+    last_date = dynamo_last_activity(client)
     count = 0
     for item in streams_json:
-        item = dyjson.dumps(item)
-        item = json.loads(item)
-        
-        client.put_item(
-            TableName = 'strava_streams',
-            Item=item
-        )
-        count += 1
-    print(f"added {count} objects to dynamodb")
-    print("successfully uploaded to dynamodb")
+        if item['date'] > last_date:
+            item = dyjson.dumps(item)
+            item = json.loads(item)
+            client.put_item(
+                TableName = 'strava_streams',
+                Item=item
+            )
+            count += 1
+    if count > 0:
+        print("successfully uploaded to dynamodb")
+        print(f"added {count} objects to table")
+    else:
+        print("no new data to upload")
 
-
-    
-
-
-move_json()
-
+if __name__ == '__main__':
+    move_json()
