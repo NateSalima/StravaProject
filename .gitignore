@@ -1,8 +1,17 @@
 #config files
 dynamodb_config.json
-strava_config.json
-strava_config1.json
+*strava_config.json*
+*strava_config1.json*
+
 test.ipynb
 mapbox_tkn.txt
+
+# OS generated files #
+######################
+.local/
+.DS_STORE
 __pycache__/
 .ipynb_checkpoints/
+.ipython
+.cache
+.jupyter/

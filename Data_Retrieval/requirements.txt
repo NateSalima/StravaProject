@@ -1,0 +1,10 @@
+boto3
+dynamodb_json
+flask
+matplotlib
+numpy
+pandas
+psycopg2-binary
+sqlalchemy
+sqlalchemy-redshift
+stravalib

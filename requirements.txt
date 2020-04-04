@@ -1,8 +1,0 @@
-ipywidgets
-matplotlib
-numpy
-pandas
-psycopg2-binary
-seaborn
-sqlalchemy
-sqlalchemy-redshift
