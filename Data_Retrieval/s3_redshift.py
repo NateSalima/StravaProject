@@ -4,7 +4,7 @@ import os
 import psycopg2
 import numpy as np
 import pandas as pd
-from pandas import json_normalize
+from pandas.io.json import json_normalize
 from sqlalchemy import create_engine
 from datetime import timezone
 import configparser

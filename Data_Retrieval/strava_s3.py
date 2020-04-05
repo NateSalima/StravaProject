@@ -69,14 +69,13 @@ def get_activity_data(date_start = last_activity_date(),
 
 
 def _get_activity_data(client,
-                       date_start =  '2016-03-12 03:44:17+00:00',#last_activity_date(),
+                       date_start =  last_activity_date(), # '2016-03-12 03:44:17+00:00',
                        date_end = pd.to_datetime('today', format="%Y-%m-%d %H:%M:%S"),
                        resolution = 'high',
                        types = ['altitude', 'latlng', 'distance', 'time']):
 
     stream_list = []
     activity_list = []
-    count = 0
     for activity in client.get_activities(after=date_start,
                                           before=date_end):
         streams = client.get_activity_streams(activity.id,
@@ -170,5 +169,5 @@ def get_past_data(client, file_name):
 if __name__ == '__main__':
     print(last_activity_date())
     upload_data = get_activity_data()
-  #  upload_s3(upload_data[0], upload_name = "strava.json")
+    upload_s3(upload_data[0], upload_name = "strava.json")
     upload_s3(upload_data[1], upload_name = "strava_streams.json")
