@@ -1,8 +1,11 @@
 # Strava Data Analysis
 This project moves Strava data to a Jupyter notebook and a Dash app on a daily basis using airflow.
 
+# Motivation
+I have been wanting to do an end to end data project to get a feel for the different aspects of data science an I was recommended to take a look at the Strava API(For those who don't know, Strava is a fitness social media platform that tracks activites such as runs or bike rides) and from there this project was born.
 # Summary of Pipeline
 ![Pipeline Architecture](./images/Architecture.png)
+1. First we use the Strava API
 # Prerequsites
 This project assumes the user already has an AWS and Strava account and that the user also has [docker setup](https://www.strava.com/settings/api) on their machine.
 
@@ -76,5 +79,7 @@ In order to use the strava API you have to create and register an app
     docker run -p 8888:8888 --name sj -v $(pwd):/home/jovyan/  strava_jupyter:1.0 
     ```
 4. Airflow will start running at http://localhost:8888/ ![Jupyter Setup](./images/JupyterSetup1.png)
+
+5. Verify Airflow is running ![Jupyter Setup](./images/JupyterSetup2.png)
 ## Setup Dash
 Currently Dash is not setup and is a work in progress
